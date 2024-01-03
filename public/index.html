@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NeuralVerse</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            margin: 0;
+            padding: 10px;
+            background: #333;
+            color: white;
+            position: relative;
+        }
+        .status-indicator {
+            position: absolute;
+            right: 20px;
+            top: 30%;
+            color: white;
+            display: flex;
+            align-items: center;
+            font-size: 50%;
+            font-weight: normal;
+        }
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            border-radius: 50%;
+            margin-left: 5px;
+            background-color: red; /* Default to red (disconnected) */
+        }
+        .chat-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            height: calc(100% - 40px);
+        }
+        .chatbox {
+            flex-grow: 1;
+            overflow: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1); /* Add shadow */
+            border: 1px solid #ddd; /* Add border */
+    }
+        .message {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .user {
+            color: #1a73e8;
+            background-color: #e8f0fe;
+        }
+        .bot {
+            color: #34a853;
+            background-color: #e6f4ea;
+        }
+        .input-container {
+            display: flex;
+            padding: 10px;
+            align-items: center; /* Align items at the top */
+        }
+        textarea {
+            flex-grow: 1;
+            padding: 10px;
+            margin-right: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: none; /* Prevent manual resize */
+            overflow: auto; /* Add scrollbar when necessary */
+            white-space: pre-wrap; /* Wrap text */
+            min-height: 3em;
+            height: 3em;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            background-color: #4285f4;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            flex-grow: 0; /* Prevent button from growing */
+        }
+        button:hover {
+            background-color: #3367d6;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pseudonymous Networks
+        <div class="status-indicator">
+            <span id="status-text">Offline</span> <span id="status-dot" class="status-dot"></span>
+        </div>
+    </h1>
+    <div class="chat-container">
+        <div class="chatbox" id="chatbox"></div>
+        <div class="input-container">
+            <textarea id="message" placeholder="Type your message here..." rows="1"></textarea>
+            <button id="send">Send</button>
+        </div>
+    </div>
+    <script>
+        var chatbox = document.getElementById("chatbox");
+        var message = document.getElementById("message");
+        var send = document.getElementById("send");
+
+        message.addEventListener('input', function() {
+            this.style.height = 'auto'; 
+            const maxHeight = 192;
+            if (this.scrollHeight > maxHeight) {
+                this.style.height = maxHeight + 'px'; 
+                this.style.overflowY = 'auto';
+            } else {
+                this.style.height = this.scrollHeight + 'px';
+                this.style.overflowY = 'hidden';
+            }
+        });
+
+        var socket;
+        var reconnectInterval = 1000; // Start with 1 second
+        var maxReconnectInterval = 60000; // Cap at 60 seconds
+
+        function connect() {
+            socket = new WebSocket("ws://localhost:3000");
+
+            socket.onopen = function() {
+                console.log("WebSocket connected");
+                updateStatusIndicator(true);
+                reconnectInterval = 1000; // Reset reconnection interval
+            };
+
+            socket.onmessage = function(event) {
+                const messageData = event.data;
+                const messageElement = document.createElement("div");
+                messageElement.className = "message bot";
+                messageElement.innerHTML = "<strong>Walter:</strong> " + messageData;
+                chatbox.appendChild(messageElement);
+            };
+
+            socket.onclose = function(e) {
+                console.log('Socket is closed. Reconnecting in ' + reconnectInterval / 1000 + ' second(s).', e.reason);
+                updateStatusIndicator(false);
+                setTimeout(connect, reconnectInterval);
+                if (reconnectInterval < maxReconnectInterval) {
+                    reconnectInterval *= 2; // Double the interval
+                }
+            };
+
+            socket.onerror = function(err) {
+                console.error('Socket encountered error: ', err.message, 'Closing socket');
+                updateStatusIndicator(false);
+                socket.close();
+            };
+        }
+
+        function updateStatusIndicator(connected) {
+            var statusDot = document.getElementById("status-dot");
+            var statusText = document.getElementById("status-text");
+            if (connected) {
+                statusDot.style.backgroundColor = "green";
+                statusText.textContent = "Online";
+            } else {
+                statusDot.style.backgroundColor = "red";
+                statusText.textContent = "Offline";
+            }
+        }
+
+        connect();
+
+        function sendMessage() {
+            var userMessage = message.value.trim();
+            if (userMessage === '') {
+                return;
+            }
+
+            var userDiv = document.createElement("div");
+            userDiv.className = "message user";
+            userDiv.innerHTML = "<strong>You:</strong> " + userMessage.replace(/\n/g, '<br>');
+            chatbox.appendChild(userDiv);
+
+            message.value = "";
+            message.style.height = 'auto';
+
+            socket.send(userMessage);
+        }
+
+        send.addEventListener('click', sendMessage);
+
+        message.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            displayWelcomeMessage();
+        });
+
+        function displayWelcomeMessage() {
+            const welcomeMessage = 'Hello, how can I help you?';
+            const messageElement = document.createElement("div");
+            messageElement.className = "message bot";
+            messageElement.innerHTML = "<strong>Walter:</strong> " + welcomeMessage;
+            chatbox.appendChild(messageElement);
+        }
+    </script>
+</body>
+</html>
+
